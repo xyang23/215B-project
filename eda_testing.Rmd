@@ -1,0 +1,118 @@
+---
+title: "STAT215B Project"
+author: "Yilong Hou/3038531953"
+date: "2024-04-17"
+output: html_document
+---
+
+```{r}
+library(Matching)
+
+```
+
+
+```{r}
+data(lalonde)
+```
+
+
+
+
+```{r}
+# Function to calculate proportions of each binary variable
+calculate_proportions <- function(data, variable) {
+  t_prop <- mean(data[[variable]][data$treat == 1], na.rm = TRUE)
+  c_prop <- mean(data[[variable]][data$treat == 0], na.rm = TRUE)
+  c(Treatment = t_prop, Control = c_prop)
+}
+
+# List of binary variables to calculate proportions for
+binary_variables <- c("black", "hisp", "married", "nodegr", "u74", "u75")
+
+# Initialize a dataframe to store the results
+proportions_df <- data.frame(Variable = binary_variables, Treatment = NA_real_, Control = NA_real_)
+
+# Loop over the binary variables to calculate and store the proportions
+for (var in binary_variables) {
+  proportions <- calculate_proportions(lalonde, var)
+  proportions_df[proportions_df$Variable == var, "Treatment"] <- proportions["Treatment"]
+  proportions_df[proportions_df$Variable == var, "Control"] <- proportions["Control"]
+}
+
+# Calculate the overall proportion of the treatment and control group sizes
+overall_treatment_proportion <- mean(lalonde$treat == 1, na.rm = TRUE)
+overall_control_proportion <- mean(lalonde$treat == 0, na.rm = TRUE)
+
+# Add the overall proportions to the dataframe
+proportions_df <- rbind(proportions_df, data.frame(Variable = "Overall", Treatment = overall_treatment_proportion, Control = overall_control_proportion))
+
+# Output the dataframe
+print(proportions_df)
+
+```
+
+
+
+```{r}
+# Assume we have a lalonde dataframe with binary treatment indicator 'treat'
+
+# Divide the data into treatment and control groups
+treatment_data <- lalonde[lalonde$treat == 1, ]
+control_data <- lalonde[lalonde$treat == 0, ]
+
+# We need to ensure that the number of rows in both groups is the same
+# If they are not, we will truncate the larger group to the size of the smaller one
+min_rows <- min(nrow(treatment_data), nrow(control_data))
+treatment_data <- treatment_data[1:min_rows, ]
+control_data <- control_data[1:min_rows, ]
+
+# Now we can perform the McNemar test for each binary variable
+binary_variables <- c("black", "hisp", "married", "nodegr", "u74", "u75")
+mcnemar_results <- list()
+
+for(variable in binary_variables) {
+  # Create a 2x2 contingency table for the variable
+  mcnemar_table <- table(treatment_data[, variable], control_data[, variable])
+  
+  # Perform the McNemar test
+  mcnemar_results[[variable]] <- mcnemar.test(mcnemar_table)
+}
+
+# Display the results
+mcnemar_results
+```
+
+
+
+```{r}
+# T-test for age
+age_t_test <- t.test(age ~ treat, data = lalonde)
+print(age_t_test)
+
+# T-test for education
+educ_t_test <- t.test(educ ~ treat, data = lalonde)
+print(educ_t_test)
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
