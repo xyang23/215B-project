@@ -54,35 +54,64 @@ print(proportions_df)
 
 
 ```{r}
-# Assume we have a lalonde dataframe with binary treatment indicator 'treat'
-
-# Divide the data into treatment and control groups
-treatment_data <- lalonde[lalonde$treat == 1, ]
-control_data <- lalonde[lalonde$treat == 0, ]
-
-# We need to ensure that the number of rows in both groups is the same
-# If they are not, we will truncate the larger group to the size of the smaller one
-min_rows <- min(nrow(treatment_data), nrow(control_data))
-treatment_data <- treatment_data[1:min_rows, ]
-control_data <- control_data[1:min_rows, ]
-
-# Now we can perform the McNemar test for each binary variable
-binary_variables <- c("black", "hisp", "married", "nodegr", "u74", "u75")
-mcnemar_results <- list()
-
-for(variable in binary_variables) {
-  # Create a 2x2 contingency table for the variable
-  mcnemar_table <- table(treatment_data[, variable], control_data[, variable])
+# Function to perform Fisher's Exact Test for a given variable
+perform_fishers_test <- function(data, variable) {
+  # Create the contingency table
+  contingency_table <- table(data$treat, data[[variable]])
   
-  # Perform the McNemar test
-  mcnemar_results[[variable]] <- mcnemar.test(mcnemar_table)
+  # Perform Fisher's Exact Test
+  test_result <- fisher.test(contingency_table)
+  
+  # Return the p-value (or the whole test result if you need more info)
+  return(list(p_value = test_result$p.value, result = test_result))
 }
 
-# Display the results
-mcnemar_results
+# List of binary variables to test
+binary_variables <- c("black", "hisp", "married", "nodegr", "u74", "u75")
+
+# Apply Fisher's Exact Test to each variable
+test_results <- lapply(binary_variables, function(var) {
+  perform_fishers_test(lalonde, var)
+})
+
+# Print results
+names(test_results) <- binary_variables
+test_results
 ```
 
+```{r}
+# Assuming 'lalonde' is your dataframe and it contains the variables
 
+# List of binary variables to test
+binary_variables <- c("black", "hisp", "married", "nodegr", "u74", "u75")
+
+# Function to perform Chi-square test for a given variable
+perform_chi_square_test <- function(data, variable) {
+  # Create the contingency table
+  contingency_table <- table(data$treat, data[[variable]])
+  
+  # Check if any expected count is less than 5
+  if (any(prop.table(contingency_table) * sum(contingency_table) < 5)) {
+    # Perform Fisher's Exact Test if expected counts are low
+    test_result <- fisher.test(contingency_table)
+  } else {
+    # Perform Chi-square test
+    test_result <- chisq.test(contingency_table)
+  }
+  
+  # Return the result
+  return(test_result)
+}
+
+# Apply Chi-square test to each variable
+test_results <- lapply(binary_variables, function(var) {
+  perform_chi_square_test(lalonde, var)
+})
+
+# Print results
+names(test_results) <- binary_variables
+test_results
+```
 
 ```{r}
 # T-test for age
