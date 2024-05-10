@@ -32,8 +32,11 @@ for (col in c('treatment', 'black', 'hispanic',
 
 ```{r}
 format <- function(model) {
-  res <- summary(model)$coefficients['treatment1', 1:2]
-  return(paste(round(res[1]), ' (', round(res[2]), ')', sep = ''))
+  res <- summary(model)$coefficients['treatment1', c(1, 4)]
+  x <- round(res[1])
+  z <- paste('(', ifelse(res[2] < .0001, '<.0001', 
+                         round(res[2], 4)), ')', sep = '')
+  return(rbind(x, z))
 }
 ```
 
@@ -48,7 +51,7 @@ RowB <- function(group) {
   col4 <- format(lm(re78~treatment + age + poly(age, 2) + education + nodegree + black + hispanic + re75, lalonde[lalonde$group %in% c('treated', group),]))
   
   col5 <- format(lm(re78~treatment + age + education + nodegree + black + hispanic + married + re75 + u75, lalonde[lalonde$group %in% c('treated', group),]))
-  return(c(col1, col2, col3, col4, col5))
+  return(cbind(col1, col2, col3, col4, col5))
 }
 ```
 
@@ -63,19 +66,27 @@ RowC <- function(group) {
   col4 <- format(lm(re78~treatment + age + poly(age, 2) + education + nodegree + black + hispanic + re75 + re74, lalonde[lalonde$group %in% c('treated', group),]))
   
   col5 <- format(lm(re78~treatment + age + education + nodegree + black + hispanic + married + re75 + u75 + u74 + re74, lalonde[lalonde$group %in% c('treated', group),]))
-  return(c(col1, col2, col3, col4, col5))
+  return(cbind(col1, col2, col3, col4, col5))
 }
 ```
 
 ```{r}
 PanelB <- function() {
-  panelB <- t(sapply(c('control', 'psid', 'psid2', 'psid3', 'cps', 'cps2', 'cps3'), RowB))
+  panelB <- rbind(RowB('control'), 
+        RowB('psid'), RowB('psid2'), RowB('psid3'),
+        RowB('cps'), RowB('cps2'), RowB('cps3'))
   colnames(panelB) <- 1:5
+  rownames(panelB) <- c('NSW Control', '', 'PSID-1', '','PSID-2', '', 'PSID-3', '',
+                        'CPS-1', '', 'CPS-2', '', 'CPS-3', '')
   return(panelB)
 }
 PanelC <- function() {
-  panelC <- t(sapply(c('control', 'psid', 'psid2', 'psid3', 'cps', 'cps2', 'cps3'), RowC))
+  panelC <- rbind(RowC('control'), 
+        RowC('psid'), RowC('psid2'), RowC('psid3'),
+        RowC('cps'), RowC('cps2'), RowC('cps3'))
   colnames(panelC) <- 1:5
+  rownames(panelC) <- c('NSW Control', '', 'PSID-1', '','PSID-2', '', 'PSID-3', '',
+                        'CPS-1', '', 'CPS-2', '', 'CPS-3', '')
   return(panelC)
 }
 ```
@@ -89,7 +100,7 @@ PanelC()
 ```
 
 ```{r}
-Propensity <- function(group) {
+Propensity1 <- function(group) {
   propensity = c()
   
   if (group == 'psid') {
@@ -109,13 +120,40 @@ Propensity <- function(group) {
 ```
 
 ```{r}
-RowMatch <- function(group) {
-  propensity <- Propensity(group)
+Propensity2 <- function(group) {
+  propensity = c()
+  
+  if (group == 'psid') {
+    propensity <- predict(glm(treatment~age + poly(age, 2) + education + poly(education, 2) + married + nodegree + black + hispanic + re75 + poly(re75, 2) + u74*black, data = lalonde[lalonde$group %in% c('treated', group),], family = binomial(link = "logit")), type = "response")
+  }
+
+  if (group %in% c('psid2', 'psid3')) {
+    propensity <- predict(glm(treatment~age + poly(age, 2) + education + poly(education, 2) + married + nodegree + black + hispanic + re75 + poly(re75, 2) + u74 + u75, data = lalonde[lalonde$group %in% c('treated', group),], family = binomial(link = "logit")), type = "response")
+  }
+
+  if (group %in% c('cps', 'cps2', 'cps3')) {
+    propensity <- predict(glm(treatment~age + poly(age, 2) + education + poly(education, 2) + married + nodegree + black + hispanic + re75 + u74 + u75 + poly(age, 3), data = lalonde[lalonde$group %in% c('treated', group),], family = binomial(link = "logit")), type = "response")
+  }
+  
+  return(propensity)
+}
+```
+
+```{r}
+Propensity3 <- function(group) {
+  propensity <- predict(glm(treatment~age + education + nodegree + black + hispanic + married + re75 + u75 + u74 + re74, data = lalonde[lalonde$group %in% c('treated', group),], family = binomial(link = "logit")), type = "response")
+  
+  return(propensity)
+}
+```
+
+```{r}
+PropensityMatch <- function(group, propensity, RE74=TRUE) {
   treat_ps <- propensity[as.character(which(lalonde$group == 'treated'))]
   group_ps <- propensity[as.character(which(lalonde$group == group))]
 
   control <- c()
-  for (i in 1:length(treat)) {
+  for (i in 1:length(treat_ps)) {
     control[i] <- which.min((group_ps - treat_ps[i])^2)
   }
   weights <- c(rep(1, sum(lalonde$group == 'treated')), sapply(unique(control), function(v) sum(control == v)))
@@ -124,19 +162,50 @@ RowMatch <- function(group) {
      lalonde[c(which(lalonde$group == 'treated'), 
                which(lalonde$group == group)[unique(control)]),], 
      weights = weights))
-  col2 <- format(lm(re78~treatment + age + poly(age, 2) + education + nodegree + black + hispanic + re74 + re75, 
+  col2 <- c()
+  if (RE74) {
+    col2 <- format(lm(re78~treatment + age + poly(age, 2) + education + nodegree + black + hispanic + re75 + re74, 
      lalonde[c(which(lalonde$group == 'treated'), 
                which(lalonde$group == group)[unique(control)]),], 
      weights = weights))
+  } else {
+    col2 <- format(lm(re78~treatment + age + poly(age, 2) + education + nodegree + black + hispanic + re75, 
+     lalonde[c(which(lalonde$group == 'treated'), 
+               which(lalonde$group == group)[unique(control)]),], 
+     weights = weights))
+  }
   
-  return(c(col1, col2))
+  return(cbind(col1, col2))
+}
+```
+
+```{r}
+RowMatch <- function(group) {
+  if (group == 'control') {
+    col1 <- format(lm(re78~treatment, lalonde[lalonde$group %in% c('treated', group),]))
+    col2 <- format(lm(re78~treatment + age + poly(age, 2) + education + nodegree + black + hispanic + re75 + re74, lalonde[lalonde$group %in% c('treated', group),]))
+    col3 <- format(lm(re78~treatment, lalonde[lalonde$group %in% c('treated', group),]))
+    col4 <- format(lm(re78~treatment + age + poly(age, 2) + education + nodegree + black + hispanic + re75 + re74, lalonde[lalonde$group %in% c('treated', group),]))
+    col5 <- format(lm(re78~treatment, lalonde[lalonde$group %in% c('treated', group),]))
+    col6 <- format(lm(re78~treatment + age + poly(age, 2) + education + nodegree + black + hispanic + re75 + re74, lalonde[lalonde$group %in% c('treated', group),]))
+    row <- cbind(col1, col2, col3, col4, col5, col6)
+  } else {
+    row <- cbind(PropensityMatch(group, Propensity2(group)), 
+               PropensityMatch(group, Propensity1(group)),
+               PropensityMatch(group, Propensity3(group)))
+  }
+  return(row)
 }
 ```
 
 ```{r}
 PanelMatch <- function() {
-  panel <- t(sapply(c('psid', 'psid2', 'psid3', 'cps', 'cps2', 'cps3'), RowMatch))
-  colnames(panel) <- 1:2
+  panel <- rbind(RowMatch('control'), 
+                 RowMatch('psid'), RowMatch('psid2'), RowMatch('psid3'),
+                 RowMatch('cps'), RowMatch('cps2'), RowMatch('cps3'))
+  colnames(panel) <- 1:6
+  rownames(panel) <- c('NSW Control', '', 'PSID-1', '','PSID-2', '', 'PSID-3', '',
+                        'CPS-1', '', 'CPS-2', '', 'CPS-3', '')
   return(panel)
 }
 ```

@@ -17,11 +17,5 @@ remove(df)
 remove(file)
 remove(name)
 
-lalonde$u74 = as.integer(lalonde$re74 == 0)#as.factor()
-lalonde$u75 = as.integer(lalonde$re75 == 0)#as.factor()
-
-#lalonde$treatment <- as.factor(lalonde$treatment)
-#lalonde$black <- as.factor(lalonde$black)
-#lalonde$hispanic <- as.factor(lalonde$hispanic)
-#lalonde$married <- as.factor(lalonde$married)
-#lalonde$nodegree <- as.factor(lalonde$nodegree)
+lalonde$u74 = as.integer(lalonde$re74 == 0)
+lalonde$u75 = as.integer(lalonde$re75 == 0)
